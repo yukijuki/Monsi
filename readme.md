@@ -4,7 +4,7 @@ Things You need to install
 $ sudo easy_install pip
 
 2,
-$ brew install python3
+$ brew install python3.6.5
 
 3,
 $ pip install Flask
