@@ -13,7 +13,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
 
 app.debug = True
 db = SQLAlchemy(app)
-db.create_all()
+# db.create_all()
 
 # Define Models
 
@@ -44,6 +44,7 @@ class Favorite(db.Model):
     uuid = db.Column(db.String(255), unique=True)
     image_id = db.Column(db.String(255), unique=True)
     like = db.Column(db.Boolean)
+    created_at = db.Column(db.DateTime())
 
 
 #----------------------------------------------------------------
@@ -161,18 +162,20 @@ def like_images():
     #Update
     if favorite.like == True:
         favorite.like = False
+        favorite.created_at = datetime.datetime.now()
         db.session.add(favorite)
         db.session.commit()
 
     #Update
     elif favorite.like == False:
         favorite.like = True
+        favorite.created_at = datetime.datetime.now()
         db.session.add(favorite)
         db.session.commit()
 
     #Post
     else: #when its first time to like there is nothing in the db 
-        like = Favorite(uuid=data["uuid"], image_id=data["image_id"], like=True)
+        like = Favorite(uuid=data["uuid"], image_id=data["image_id"], like=True, created_at=datetime.datetime.now())
         db.session.add(like)
         db.session.commit()
 
@@ -190,8 +193,9 @@ def load_favorite():
     }
     """
     #want to load not just Favorite table but Favorite and Image joined
-
-    favorite = Favorite.query.filter_by(uuid=data["uuid"]).filter_by(image_id=data["image_id"]).filter_by(like=True).all()
+    #loads images that we favorited in the order of latest
+    
+    favorite = Favorite.query.filter_by(uuid=data["uuid"]).filter_by(image_id=data["image_id"]).filter_by(like=True).order_by(Favorite.created_at.desc()).all()
     images = Image.query.filter_by(image_id=favorite.image_id).all()
 
     response = []
