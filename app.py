@@ -17,7 +17,6 @@ db = SQLAlchemy(app)
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True)
-    password = db.Column(db.String(255))
     confirmed_at = db.Column(db.DateTime())
     
 
@@ -53,11 +52,10 @@ def register():
     """
     data = {
         "email":"Str",
-        "password":"Str"
     }
     """
 
-    newuser = User(email=data["email"], password=data["password"], confirmed_at=datetime.datetime.now())
+    newuser = User(email=data["email"], confirmed_at=datetime.datetime.now())
     db.session.add(newuser)
     db.session.commit()
 
@@ -70,26 +68,15 @@ def login():
     """
     data = {
         "email":"Str",
-        "password":"Str"
     }
     """
 
     user = User.query.filter_by(email=data["email"]).first()
 
     if user is None:
-        return 404, jsonify({"message":"No user found"})
-
-    elif user.password == data["password"]:
-        user_data = {}
-        user_data["email"] = user.email
-        user_data["password"] = user.password
-        return 200
-
-    elif user_data["password"] == "":
-        return 403
-
+        return jsonify({"message":"No user found"})
     else:
-        return 418
+        return jsonify({"message":"Logined Succesfully"})
     
 
 #-------------------------------------------------------
@@ -142,10 +129,11 @@ def click_images():
     log = Log(email=data["email"], image_id=data["image_id"], created_at=datetime.datetime.now())
     db.session.add(log)
     db.session.commit()
-    return 200
+
+    return jsonify({"images": "clicked"})
 
 
-@app.route("/like_images", methods=["GET", "POST", "DELETE"])
+@app.route("/likes/", methods=["GET", "POST"])
 def like_images():
     data = request.get_json()
 
@@ -158,10 +146,14 @@ def like_images():
 
     like = Like.query.filter_by(email=data["email"]).filter_by(image_id=data["image_id"]).all()
 
-    #Post
+    #Delete
     if like is not None: 
         db.session.delete(like)
+        image = Image.query.filter_by(image_id=data["image_id"]).all()
+        image.count_likes -= 1
         db.session.commit()
+
+        return jsonify({"message": "succesfully unliked"})
 
     #Post
     else: #when its first time to like there is nothing in the db 
@@ -170,12 +162,12 @@ def like_images():
 
         image = Image.query.filter_by(image_id=data["image_id"]).all()
         if image.count_likes is None:
-            image.count = 0
+            image.count = 1
         else:
             image.count_likes += 1
         db.session.commit()
 
-    return 200
+        return jsonify({"message": "succesfully liked"})
 
 
 @app.route("/load_like", methods=["Get"])
