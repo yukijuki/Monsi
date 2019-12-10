@@ -1,9 +1,6 @@
 from flask import Flask, request, redirect, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
-import uuid
 import datetime
-
-
 
 app = Flask(__name__)
 
@@ -19,7 +16,6 @@ db = SQLAlchemy(app)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    uuid = db.Column(db.String(255), unique=True)
     email = db.Column(db.String(255), unique=True)
     password = db.Column(db.String(255))
     confirmed_at = db.Column(db.DateTime())
@@ -30,18 +26,18 @@ class Image(db.Model):
     image_id = db.Column(db.String(255), unique=True)
     url = db.Column(db.String(255), unique=True)
     link = db.Column(db.String(255))
-
+    count_likes = db.Column(db.Integer)
 
 class Log(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    uuid = db.Column(db.String(255), unique=True)
+    email = db.Column(db.String(255), unique=True)
     image_id = db.Column(db.String(255))
     created_at = db.Column(db.DateTime())
 
 
-class Favorite(db.Model):
+class Like(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    uuid = db.Column(db.String(255), unique=True)
+    email = db.Column(db.String(255), unique=True)
     image_id = db.Column(db.String(255), unique=True)
     like = db.Column(db.Boolean)
     created_at = db.Column(db.DateTime())
@@ -61,7 +57,7 @@ def register():
     }
     """
 
-    newuser = User(uuid=str(uuid.uuid4()), email=data["email"], password=data["password"], confirmed_at=datetime.datetime.now())
+    newuser = User(email=data["email"], password=data["password"], confirmed_at=datetime.datetime.now())
     db.session.add(newuser)
     db.session.commit()
 
@@ -103,13 +99,14 @@ def login():
 def get_first_image():
 
     image = Image.query.first()
-
+    
     response = []
 
     image_data = {}
     image_data["image_id"] = image.image_id
     image_data["url"] = image.url
     image_data["link"] = image.link
+    image_data["count_likes"] = image.count_likes
     response.append(image_data)
 
     return jsonify({"images": response})
@@ -126,6 +123,7 @@ def get_images():
         image_data["image_id"] = image.image_id
         image_data["url"] = image.url
         image_data["link"] = image.link
+        image_data["count_likes"] = image.count_likes
         response.append(image_data)
 
     return jsonify({"images": response})
@@ -136,67 +134,65 @@ def click_images():
     data = request.get_json()
     """
     data = {
-        "uuid":"Str",
+        "email":"Str",
         "image_id":"Int"
     }
     """
     #is post better or insert better for log?
-    log = Log(uuid=data["uuid"], image_id=data["image_id"], created_at=datetime.datetime.now())
+    log = Log(email=data["email"], image_id=data["image_id"], created_at=datetime.datetime.now())
     db.session.add(log)
     db.session.commit()
     return 200
 
 
-@app.route("/like_images", methods=["GET", "POST", "UPDATE"])
+@app.route("/like_images", methods=["GET", "POST", "DELETE"])
 def like_images():
     data = request.get_json()
+
     """
     data = {
-        "uuid":"Str",
+        "email":"Str",
         "image_id":"Int"
     }
     """
 
-    favorite = Favorite.query.filter_by(uuid=data["uuid"]).filter_by(image_id=data["image_id"]).all()
+    like = Like.query.filter_by(email=data["email"]).filter_by(image_id=data["image_id"]).all()
 
-    #Update
-    if favorite.like == True:
-        favorite.like = False
-        favorite.created_at = datetime.datetime.now()
-        db.session.add(favorite)
-        db.session.commit()
-
-    #Update
-    elif favorite.like == False:
-        favorite.like = True
-        favorite.created_at = datetime.datetime.now()
-        db.session.add(favorite)
+    #Post
+    if like is not None: 
+        db.session.delete(like)
         db.session.commit()
 
     #Post
     else: #when its first time to like there is nothing in the db 
-        like = Favorite(uuid=data["uuid"], image_id=data["image_id"], like=True, created_at=datetime.datetime.now())
+        like = like(email=data["email"], image_id=data["image_id"], like=True, created_at=datetime.datetime.now())
         db.session.add(like)
+
+        image = Image.query.filter_by(image_id=data["image_id"]).all()
+        if image.count_likes is None:
+            image.count = 0
+        else:
+            image.count_likes += 1
         db.session.commit()
 
     return 200
 
 
-@app.route("/load_favorite", methods=["Get"])
-def load_favorite():
+@app.route("/load_like", methods=["Get"])
+def load_like():
     data = request.get_json()
 
     """
     data = {
-        "uuid":"Str",
+        "email":"Str",
         "image_id":"Int"
     }
     """
-    #want to load not just Favorite table but Favorite and Image joined
-    #loads images that we favorited in the order of latest
+    #want to load not just like table but like and Image joined
+    #loads images that we liked in the order of latest
     
-    favorite = Favorite.query.filter_by(uuid=data["uuid"]).filter_by(image_id=data["image_id"]).filter_by(like=True).order_by(Favorite.created_at.desc()).all()
-    images = Image.query.filter_by(image_id=favorite.image_id).all()
+    like = Like.query.filter_by(email=data["email"]).filter_by(image_id=data["image_id"]).order_by(Like.created_at.desc()).all()
+    images = Image.query.filter_by(image_id=like.image_id).all()
 
     response = []
 
@@ -205,6 +201,7 @@ def load_favorite():
         image_data["image_id"] = image.image_id
         image_data["url"] = image.url
         image_data["link"] = image.link
+        image_data["count_likes"] = image.count_likes
         response.append(image_data)
 
     return jsonify({"images": response})
